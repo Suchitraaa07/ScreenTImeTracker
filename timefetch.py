@@ -28,7 +28,8 @@ def fetch_window_times(duration):
         else:
             end_time = datetime.now()
             duration_seconds = (end_time - start_time).total_seconds()
-
+            if duration_seconds >3600:
+                duration_seconds = duration_seconds/3600
             windowrecord.append( ( currwindow.title, start_time, end_time, duration_seconds) )
             start_time = datetime.now()
             currwindow = window
@@ -37,7 +38,8 @@ def fetch_window_times(duration):
     if currwindow is not None:
         end_time = datetime.now()
         duration_seconds = (end_time - start_time).total_seconds()
-
+        if duration_seconds >3600:
+                duration_seconds = duration_seconds/3600
         windowrecord.append(
             (currwindow.title, start_time, end_time, duration_seconds)
         )

@@ -16,10 +16,28 @@ st.markdown("""
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg,#1e293b,#0f172a);
 }
+ 
+section[data-testid="stSidebar"] a {
+    font-size: 15px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    color: white !important;
+}
+            
+section[data-testid="stSidebar"] a:hover {
+    background-color: white;
+    color: #1e293b !important;
+}
 
+section[data-testid="stSidebar"] a[aria-current="page"] {
+    background-color: #2563eb;
+    background-color: #ffffff;
+    color: white !important;
+}
+            
 .sidebar-item {
     padding: 10px 16px;
-    color: #cbd5f5;
+    color: #cbd5ff5;
     border-radius: 8px;
     margin-bottom: 6px;
     font-weight: 500;
@@ -58,14 +76,6 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# ---------------- SIDEBAR ----------------
-
-with st.sidebar:
-    st.markdown("## 🧭 MyTracker")
-    st.markdown("<div class='sidebar-item active'>Dashboard</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-item'>App Usage</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-item'>Daily Trends</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sidebar-item'>Settings</div>", unsafe_allow_html=True)
 
 # ---------------- LOAD DATA ----------------
 conn = get_connection()

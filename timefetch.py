@@ -1,8 +1,9 @@
 import pygetwindow as gw
 from datetime import datetime 
 import time
+import streamlit as st
 
-def fetch_window_times(duration):
+def fetch_window_times():
 
     start = time.time()
     start_time = datetime.now()
@@ -10,7 +11,7 @@ def fetch_window_times(duration):
     window = None
     windowrecord = []
 
-    while time.time() - start < duration:
+    while st.session_state.tracking:
         window = gw.getActiveWindow()
         if window is None:
                 time.sleep(0.5)

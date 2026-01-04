@@ -1,9 +1,10 @@
 import pandas as pd
 import streamlit as st
 from db import get_connection
-from timefetch import fetch_window_times
 import time
 import plotly.express as px
+import pygetwindow as gw
+from datetime import datetime
 
 st.set_page_config(page_title="MyTracker", page_icon=":bar_chart:", layout="centered")
 
@@ -78,26 +79,93 @@ section[data-testid="stSidebar"] a:hover {
 
 st.title("MyTracker")
 
-duration = st.number_input("Enter duration in seconds:", min_value=1, value=10)
+# ---------------- SESSION STATE INIT ----------------
+if "tracking_active" not in st.session_state:
+    st.session_state.tracking_active = False
 
-if st.button("Start Tracking"):
+if "previous_window" not in st.session_state:
+    st.session_state.previous_window = None
 
-    st.markdown("Tracking started...")
+if "start_time" not in st.session_state:
+    st.session_state.start_time = None
 
-    record = fetch_window_times(duration)
+if "session_start_time" not in st.session_state:
+    st.session_state.session_start_time = None
+
+# ---------------- BUTTONS ----------------
+col1, col2 = st.columns(2)
+
+with col1:
+    if st.button("Start"):
+        st.session_state.tracking_active = True
+        st.session_state.previous_window = None
+        st.session_state.start_time = None
+        st.session_state.session_start_time = datetime.now()
+
+with col2:
+    if st.button("Stop"):
+        st.session_state.tracking_active = False
+
+# ---------------- TRACKING LOGIC ----------------
+if st.session_state.tracking_active:
+    st.markdown("### ⏳ Tracking started...")
+
+    window = gw.getActiveWindow()
+    current_title = window.title if window else "Unknown"
+
+    # First window → initialize only
+    if st.session_state.previous_window is None:
+        st.session_state.previous_window = current_title
+        st.session_state.start_time = datetime.now()
+
+    # Window changed → insert previous window record
+    elif current_title != st.session_state.previous_window:
+        end_time = datetime.now()
+        duration = (end_time - st.session_state.start_time).total_seconds()
+
+        conn = get_connection()
+        cur = conn.cursor()
+
+        cur.execute(
+            """
+            INSERT INTO tracker_db (event, start_time, end_time, duration)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (
+                st.session_state.previous_window,
+                st.session_state.start_time,
+                end_time,
+                duration,
+            ),
+        )
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # Update state for new window
+        st.session_state.previous_window = current_title
+        st.session_state.start_time = datetime.now()
+
+    # Rerun every second while tracking
+    time.sleep(1)
+    st.rerun()
+
+# ---------------- DISPLAY AFTER STOP (SESSION ONLY) ----------------
+if not st.session_state.tracking_active and st.session_state.session_start_time:
+    st.markdown("### ⏹️ Tracking stopped")
+
     conn = get_connection()
-    cur = conn.cursor()
-
-    query = ''' insert into tracker_db (event, start_time, end_time, duration) values (%s, %s, %s, %s) '''
-    cur.executemany(query, record)
-    conn.commit()
-
-    query2 = ''' select * from tracker_db '''
-    df = pd.read_sql(query2, conn)
-
-    cur.close()
+    query = """
+    SELECT *
+    FROM tracker_db
+    WHERE start_time >= %s
+    ORDER BY start_time
+    """
+    df = pd.read_sql(query, conn, params=(st.session_state.session_start_time,))
     conn.close()
 
-    st.dataframe(df)
-
-    record = pd.DataFrame(df, columns=["event", "start_time", "end_time", "duration"])
+    if not df.empty:
+        st.dataframe(df)
+    else:
+        st.info("No activity recorded in this session.")

@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from db import get_connection
+import plotly.graph_objects as go
+from datetime import datetime
+import time
+import pygetwindow as gw
+
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="MyTracker", layout="wide")
@@ -85,10 +90,9 @@ conn.close()
 df["start_time"] = pd.to_datetime(df["start_time"])
 df["end_time"] = pd.to_datetime(df["end_time"])
 
-# ---------------- KPIs ----------------
 total_sec = df["duration"].sum()
-total_time = f"{int(total_sec//3600):02d}h {int((total_sec%3600)//60):02d}m"
 sessions = len(df)
+total_time = f"{int(total_sec/sessions//3600):02d}h {int((total_sec%3600)//60):02d}m"
 top_app = df.groupby("event")["duration"].sum().idxmax()
 
 df["hour"] = df["start_time"].dt.hour
@@ -99,7 +103,7 @@ st.title("🎯 MyTracker Dashboard")
 
 c1, c2, c3, c4 = st.columns(4)
 with c1:
-    st.markdown(f"<div class='kpi kpi-blue'><div class='kpi-title'>Total Time</div><div class='kpi-value'>{total_time}</div></div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='kpi kpi-blue'><div class='kpi-title'>Avg Time per session</div><div class='kpi-value'>{total_time}</div></div>", unsafe_allow_html=True)
 with c2:
     st.markdown(f"<div class='kpi kpi-purple'><div class='kpi-title'>Total Sessions</div><div class='kpi-value'>{sessions}</div></div>", unsafe_allow_html=True)
 with c3:
@@ -107,50 +111,66 @@ with c3:
 with c4:
     st.markdown(f"<div class='kpi kpi-orange'><div class='kpi-title'>Most Active</div><div class='kpi-value'>{peak_hour_label}</div></div>", unsafe_allow_html=True)
 
-# ---------------- ROW 1 ----------------
-l1, r1 = st.columns([2, 1])
+l1, r1 = st.columns(2)
 
-# ---- Usage Timeline (SCATTER) ----
-df["bubble_size"] = df["duration"].apply(lambda x: min(max(x * 0.02, 6), 22))
-
-scatter_fig = px.scatter(
-    df,
-    x="start_time",
-    y="event",
-    size="bubble_size",
-    color="event",
-    size_max=22
+table_df = (
+    df.groupby("event", as_index=False)["duration"]
+    .sum()
+    .sort_values("duration", ascending=False)
 )
 
-scatter_fig.update_layout(
-    height=360,
-    showlegend=False,
-    margin=dict(l=220, r=20, t=30, b=20),
-    xaxis_title="Time",
-    yaxis_title=""
+table_df["Time Spent"] = table_df["duration"].apply(
+    lambda x: f"{int(x//3600)}h {int((x%3600)//60)}m"
 )
+
+table_df["Usage %"] = (table_df["duration"] / table_df["duration"].sum() * 100).round(1)
+
+display_df = table_df[["event", "Time Spent", "Usage %"]]
 
 with l1:
-    st.markdown("<div class='card'><h4>Usage Timeline</h4>", unsafe_allow_html=True)
-    st.plotly_chart(scatter_fig, use_container_width=True)
+    st.markdown("<div class='card'><h4>App Usage Breakdown</h4>", unsafe_allow_html=True)
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        column_config={
+            "Usage %": st.column_config.ProgressColumn(
+                "Usage %",
+                format="%.1f%%",
+                min_value=0,
+                max_value=100
+            )
+        }
+    )
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---- Donut Chart ----
+
 donut_df = df.groupby("event", as_index=False)["duration"].sum()
+donut_df = donut_df[donut_df["duration"] > donut_df["duration"].sum() * 0.03]
+
+
+donut_df["event_short"] = donut_df["event"].apply(
+    lambda x: x[:18] + "…" if len(x) > 18 else x
+)
+
 donut_fig = px.pie(
     donut_df,
-    names="event",
+    names="event_short",
     values="duration",
     hole=0.55
 )
 donut_fig.update_traces(
-    textposition="inside",
-    textinfo="percent+label"
+    textposition="outside",
+    textinfo="label+percent",
+    pull=0.02,
+    insidetextorientation="radial"
 )
+
 donut_fig.update_layout(
-    height=420,
-    width=420,              # 🔥 key line
-    showlegend=False,       # legend eats space
+    uniformtext_minsize=10, 
+    uniformtext_mode="hide",
+    height=360,
+    width=600,            
+    showlegend=False,      
     margin=dict(t=20, b=20, l=20, r=20)
 )
 
@@ -160,14 +180,11 @@ with r1:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-# ---------------- ROW 2 ----------------
 l2, r2 = st.columns(2)
 
-# ---- Screen Time Overview (FORCE 7 DAYS) ----
 df["date"] = df["start_time"].dt.date
 df["day"] = df["start_time"].dt.day_name()
 
-# get last 7 calendar days
 last_7_days = pd.date_range(
     end=df["start_time"].max().date(),
     periods=7
@@ -203,7 +220,6 @@ screen_fig.update_layout(
 screen_fig.update_traces(textposition="outside")
 
 
-# ---- Heatmap ----
 heat_df = df.groupby(["day", "hour"])["duration"].sum().reset_index()
 
 heatmap_fig = px.density_heatmap(
@@ -221,12 +237,11 @@ with r2:
     st.plotly_chart(heatmap_fig, use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
-# ---------------- ROW 3 ----------------
 t1, t2 = st.columns([3, 1])
 
 with t1:
     st.markdown("<div class='card'><h4>Recent Activities</h4>", unsafe_allow_html=True)
-    st.dataframe(df[["event","start_time","end_time","duration"]], use_container_width=True)
+    st.dataframe(df[["event","start_time","end_time"]], use_container_width=True)
     st.markdown("</div>", unsafe_allow_html=True)
 
 with t2:

@@ -8,10 +8,8 @@ import time
 import pygetwindow as gw
 
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(page_title="MyTracker", layout="wide")
 
-# ---------------- GLOBAL CSS ----------------
 st.markdown("""
 <style>
 .stApp {
@@ -82,7 +80,6 @@ section[data-testid="stSidebar"] a[aria-current="page"] {
 """, unsafe_allow_html=True)
 
 
-# ---------------- LOAD DATA ----------------
 conn = get_connection()
 df = pd.read_sql("SELECT * FROM tracker_db", conn)
 conn.close()
